@@ -1,0 +1,41 @@
+[project]
+name = "inf-serving"
+version = "0.1.0"
+description = "Inference serving harness: synthetic workloads + metrics for vLLM on SLURM"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27",
+    "matplotlib>=3.10.9",
+    "pynvml>=13.0.1",
+    "pyyaml>=6",
+    "scipy>=1.17.1",
+    "tiktoken>=0.13.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools.packages.find]
+include = ["factory*", "utils*"]
+
+[project.scripts]
+bench              = "factory.run:main"
+heatmap            = "utils.heatmap:main"
+token-counts       = "utils.token_counts:main"
+workload-timeline  = "utils.workload_timeline:main"
+latency-plot       = "utils.latency_plot:main"
+system-plot        = "utils.system_plot:main"
+summary-table      = "utils.summary_table:main"
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.environments]
+default = {solve-group = "default"}
+
+[tool.pixi.dependencies]
+python = ">=3.11"
+httpx = ">=0.27"
+pyyaml = ">=6"
+tiktoken = ">=0.13.0"

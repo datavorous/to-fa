@@ -1,0 +1,56 @@
+slurm:
+  partition: u22
+  gres: gpu:1
+  cpus: 8
+  mem: 48G
+  time: "12:00:00"
+
+vllm:
+  hf_model: Qwen/Qwen2.5-14B-Instruct
+  served_name: Qwen2.5-14B-Instruct
+  port: 8000
+  max_model_len: 8192
+  gpu_memory_utilization: 0.9
+  enable_prefix_caching: true
+  extra_args: ""
+
+run:
+  base_url: http://localhost:8000/v1
+  concurrency: 16
+  seed: 67
+  results_dir: results
+  load_mode: concurrent # synchronous | concurrent | constant | poisson | sweep
+  rate_rps: 4.0 # for constant / poisson
+  sweep_param: concurrency # for sweep: which param to vary
+  sweep_values: [1, 4, 8, 16, 32] # for sweep: values to iterate over
+  sweep_base_mode: concurrent # the load mode each sweep step runs under
+  siso:
+    n: 20
+    max_tokens: [256, 1024]
+    temperature: [0.5, 1.0]
+  silo:
+    n: 20
+    max_tokens: [2048, 4096]
+    temperature: [0.1, 0.4]
+
+experiments:
+  baseline:
+    note: "busy monday: all 4 workload types, 32 rps poisson, conc 128"
+    run:
+      load_mode: poisson
+      rate_rps: 32.0
+      concurrency: 128
+      siso:
+        n: 300
+        max_tokens: [128, 512]
+        temperature: [0.5, 1.0]
+      silo:
+        n: 75
+        max_tokens: [2048, 3072]
+        temperature: [0.1, 0.4]
+      liso:
+        n: 200
+        max_tokens: [64, 256]
+      lilo:
+        n: 150
+        max_tokens: [1024, 2048]
