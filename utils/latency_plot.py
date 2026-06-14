@@ -15,13 +15,14 @@ import sys
 import matplotlib
 
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "DM Sans"
 import matplotlib.pyplot as plt
 import numpy as np
 
 PROFILES = ["siso", "silo", "liso", "lilo"]
-COLORS = {"siso": "#4a9e9a", "silo": "#f4a261", "liso": "#7dbb8a", "lilo": "#c47ec4"}
-BG = "#f7fafa"
-PANEL_BG = "#f0f7f7"
+COLORS = {"siso": "#1a0f14", "silo": "#d94f7a", "liso": "#ff9eb5", "lilo": "#9e8490"}
+BG = "#fff5f7"
+PANEL_BG = "#fdf0f4"
 
 
 def _pct(vals, p):
@@ -57,19 +58,19 @@ def main():
 
     profiles_present = [p for p in PROFILES if p in stats]
     y = np.arange(len(profiles_present))
-    height = 0.45
+    height = 0.28
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 3.5))
     fig.patch.set_facecolor(BG)
     fig.suptitle(
-        f"Latency breakdown  ::  {run_dir.name}  (n={len(recs)} ok requests)",
+        f"latency breakdown  ::  {run_dir.name}  (n={len(recs)} ok requests)",
         fontsize=12,
         y=1.02,
     )
 
     for ax, key, title in [
-        (ax1, "ttft", "Time to First Token (s)"),
-        (ax2, "e2e", "End-to-End latency (s)"),
+        (ax1, "ttft", "time to first token (s)"),
+        (ax2, "e2e", "end-to-end latency (s)"),
     ]:
         ax.set_facecolor(PANEL_BG)
         ax.set_title(title, fontsize=10, pad=8)
@@ -131,12 +132,12 @@ def main():
 
         ax.set_yticks(y)
         ax.set_yticklabels(
-            [f"{p.upper()}  (n={stats[p]['n']})" for p in profiles_present], fontsize=9
+            [f"{p.lower()}  (n={stats[p]['n']})" for p in profiles_present], fontsize=9
         )
         ax.set_xlabel("seconds", fontsize=9, labelpad=6)
         ax.spines[["top", "right", "left"]].set_visible(False)
         ax.tick_params(length=0, labelsize=8)
-        ax.grid(axis="x", color="white", linewidth=1.2, zorder=0)
+        ax.grid(axis="x", color="#f0cad8", linewidth=1.0, zorder=0)
         ax.set_axisbelow(True)
 
     # legend
@@ -145,7 +146,7 @@ def main():
 
     legend_items = [
         Patch(facecolor="#888888", alpha=0.9, label="p50 (median)"),
-        Patch(facecolor="#888888", alpha=0.4, label="p50 → p95 tail"),
+        Patch(facecolor="#888888", alpha=0.4, label="p50  p95 tail"),
         Line2D(
             [0],
             [0],

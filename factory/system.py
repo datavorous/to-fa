@@ -28,6 +28,10 @@ async def poll(base_url, interval_s, snapshots, stop_event):
                         snap["prefix_cache_hits"] = float(line.split()[-1])
                     elif "vllm:gpu_prefix_cache_queries_total{" in line:
                         snap["prefix_cache_queries"] = float(line.split()[-1])
+                    elif "vllm:num_preemptions_total{" in line:
+                        snap["preemptions_total"] = float(line.split()[-1])
+                    elif "vllm:num_requests_swapped{" in line:
+                        snap["requests_swapped"] = int(float(line.split()[-1]))
             except Exception:
                 pass
 
@@ -67,12 +71,39 @@ def aggregate(snapshots):
         round(last_hits / last_queries, 4) if last_hits and last_queries else None
     )
 
+    # preemptions: cumulative total and rate over the run
+    first_preempt = next(
+        (s["preemptions_total"] for s in snapshots if "preemptions_total" in s), None
+    )
+    last_preempt = next(
+        (
+            s["preemptions_total"]
+            for s in reversed(snapshots)
+            if "preemptions_total" in s
+        ),
+        None,
+    )
+    total_preemptions = (
+        int(last_preempt - first_preempt)
+        if first_preempt is not None and last_preempt is not None
+        else None
+    )
+    wall_s = snapshots[-1]["t"] - snapshots[0]["t"] if len(snapshots) > 1 else None
+    preemptions_per_s = (
+        round(total_preemptions / wall_s, 3)
+        if total_preemptions is not None and wall_s
+        else None
+    )
+
     return {
         "kv_cache_usage_mean": _mean("kv_cache_usage"),
         "kv_cache_usage_peak": _max("kv_cache_usage"),
         "prefix_cache_hit_rate": hit_rate,
         "requests_running_mean": _mean("requests_running"),
         "requests_waiting_max": _max("requests_waiting"),
+        "preemptions_total": total_preemptions,
+        "preemptions_per_s": preemptions_per_s,
+        "requests_swapped_max": _max("requests_swapped"),
         "n_snapshots": len(snapshots),
     }
 

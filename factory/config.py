@@ -37,6 +37,7 @@ def load(experiment=None):
         liso_max_tokens = tuple(run.get("liso", {}).get("max_tokens", [64, 256]))
         lilo_n = run.get("lilo", {}).get("n", 0)
         lilo_max_tokens = tuple(run.get("lilo", {}).get("max_tokens", [2048, 3072]))
+        shared_prefix = run.get("shared_prefix", False)
 
     return CFG
 

@@ -27,29 +27,58 @@ def main():
     print(f"\n{'─'*72}")
     print(f"  run      : {s['run_id']}")
     print(f"  model    : {s['model']}")
-    print(
-        f"  requests : {s['n_ok']}/{s['n_requests']} ok  "
-        f"({s['n_error']} errors, {100*s['n_error']/s['n_requests']:.0f}% abort rate)"
+    n_aborted = s.get("n_aborted", s["n_requests"] - s["n_ok"] - s.get("n_error", 0))
+    abort_rate = s.get(
+        "abort_rate", n_aborted / s["n_requests"] if s["n_requests"] else 0
     )
     print(
+        f"  requests : {s['n_ok']}/{s['n_requests']} ok  "
+        f"({s.get('n_error', 0)} errors  {n_aborted} aborted  {abort_rate:.0%} abort rate)"
+    )
+    goodput = s.get("goodput_tok_s", s["throughput_tok_s"])
+    print(
         f"  wall     : {s['wall_s']:.1f}s   throughput: {s['throughput_tok_s']:.0f} tok/s"
+        f"   goodput: {goodput:.0f} tok/s"
     )
     print(
         f"  TTFT     : p50={s['ttft_p50_s']:.2f}s  p95={s['ttft_p95_s']:.2f}s  p99={s['ttft_p99_s']:.2f}s"
+        f"  (completed requests only)"
     )
     print(
         f"  E2E      : p50={s['e2e_p50_s']:.2f}s  p95={s['e2e_p95_s']:.2f}s  p99={s['e2e_p99_s']:.2f}s"
+        f"  (completed requests only)"
     )
+    if "steady_n" in s:
+        if s.get("steady_sufficient"):
+            print(
+                f"  TTFT ss  : p50={s['ttft_p50_steady']:.2f}s  p95={s['ttft_p95_steady']:.2f}s  p99={s['ttft_p99_steady']:.2f}s"
+                f"  (steady-state window, n={s['steady_n']})"
+            )
+            print(
+                f"  E2E  ss  : p50={s['e2e_p50_steady']:.2f}s  p95={s['e2e_p95_steady']:.2f}s  p99={s['e2e_p99_steady']:.2f}s"
+                f"  (steady-state window, n={s['steady_n']})"
+            )
+        else:
+            print(
+                f"  steady   : steady-state window contained too few requests to compute "
+                f"(n={s['steady_n']}) — server did not reach a steady regime"
+            )
     sys_s = s.get("system", {})
     if sys_s:
         print(
             f"  KV cache : mean={sys_s.get('kv_cache_usage_mean',0):.1%}  peak={sys_s.get('kv_cache_usage_peak',0):.1%}"
         )
-        print(f"  prefix   : hit_rate={sys_s.get('prefix_cache_hit_rate',0):.1%}")
+        print(f"  prefix   : hit_rate={sys_s.get('prefix_cache_hit_rate') or 0:.1%}")
         print(
             f"  queue    : running_mean={sys_s.get('requests_running_mean',0):.1f}  "
             f"waiting_max={sys_s.get('requests_waiting_max',0)}"
         )
+        if sys_s.get("preemptions_total") is not None:
+            print(
+                f"  preempt  : total={sys_s['preemptions_total']}  "
+                f"rate={sys_s.get('preemptions_per_s', 0):.2f}/s  "
+                f"swapped_max={sys_s.get('requests_swapped_max') or 0}"
+            )
     print(f"{'─'*72}\n")
 
     HDR = f"  {'profile':<8} {'n':>5}  {'TTFT p50':>9}  {'TTFT p95':>9}  {'E2E p50':>8}  {'ITL p50':>8}  {'tok/s':>6}  {'budget':>7}  {'out_mean':>8}"

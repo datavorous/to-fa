@@ -14,17 +14,18 @@ import sys
 import matplotlib
 
 matplotlib.use("Agg")
+matplotlib.rcParams["font.family"] = "DM Sans"
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import numpy as np
 
-BG = "#f7fafa"
-PANEL_BG = "#f0f7f7"
-TEAL = "#4a9e9a"
-TEAL_MID = "#7fbfb8"
-TEAL_LT = "#b8ddd4"
-WARN = "#f4a261"
-DANGER = "#c47ec4"
+BG = "#fff5f7"  # --bg-from
+PANEL_BG = "#fdf0f4"  # --code-bg
+TEAL = "#d94f7a"  # mid rose — KV / running
+TEAL_MID = "#ff9eb5"  # --select-bg — prefix hit rate
+TEAL_LT = "#fce4ed"  # --bg-to
+WARN = "#9e8490"  # --muted — waiting
+DANGER = "#7a1035"  # deep rose — eviction line
 
 
 def main():
@@ -57,7 +58,7 @@ def main():
     fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
     fig.patch.set_facecolor(BG)
     fig.suptitle(
-        f"System health timeline  ::  {run_dir.name}",
+        f"system health timeline  ·  {run_dir.name}",
         fontsize=13,
         y=1.01,
     )
@@ -78,12 +79,12 @@ def main():
     ax.axhline(
         90, color=WARN, linewidth=0.8, linestyle=":", alpha=0.6, label="90% threshold"
     )
-    ax.set_ylabel("KV cache %", fontsize=10)
+    ax.set_ylabel("kv cache %", fontsize=10)
     ax.set_ylim(0, 105)
     ax.legend(fontsize=8, framealpha=0.85, edgecolor="#cccccc", loc="lower right")
     ax.spines[["top", "right"]].set_visible(False)
     ax.tick_params(length=0, labelsize=8)
-    ax.grid(axis="y", color="white", linewidth=0.8)
+    ax.grid(axis="y", color="#f0cad8", linewidth=0.8)
 
     # --- running / waiting ---
     ax2 = axes[1]
@@ -96,7 +97,7 @@ def main():
     ax2.legend(fontsize=8, framealpha=0.85, edgecolor="#cccccc", loc="upper right")
     ax2.spines[["top", "right"]].set_visible(False)
     ax2.tick_params(length=0, labelsize=8)
-    ax2.grid(axis="y", color="white", linewidth=0.8)
+    ax2.grid(axis="y", color="#f0cad8", linewidth=0.8)
 
     # --- prefix hit rate ---
     ax3 = axes[2]
@@ -108,7 +109,7 @@ def main():
     ax3.set_xlabel("wall time (s)", fontsize=10, labelpad=6)
     ax3.spines[["top", "right"]].set_visible(False)
     ax3.tick_params(length=0, labelsize=8)
-    ax3.grid(axis="y", color="white", linewidth=0.8)
+    ax3.grid(axis="y", color="#f0cad8", linewidth=0.8)
 
     plt.tight_layout()
     out = run_dir / "system_timeline.png"

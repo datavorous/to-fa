@@ -4,6 +4,11 @@ a study on inference serving
 
 squeezing performance out of RTX 6000 Ada (48GB) running `Qwen2.5-14B-Instruct` under realistic mixed workloads.
 
+accompanying post: [what i learned trying to break a single gpu with mixed traffic](https://datavorous.github.io/writing/lm-inference/)
+
+[![what i learned trying to break a single gpu with mixed traffic](media.png)](https://datavorous.github.io/writing/lm-inference/)
+
+
 ## why?
 
 got bored watching training loss curves, and had a few GPUs idling. an empty lab at night does give you a lot of ideas.
@@ -13,8 +18,6 @@ got bored watching training loss curves, and had a few GPUs idling. an empty lab
 instead of going the {shiny optimization technique} -> {% of perf improvements}, i wish to go the opposite way. we will generate synthetic workloads (SILO, SISO, LISO, LILO) and use different types of workload distribution patterns (query, poisson etc). 
 
 then, we try to figure out what an actual mid size AI company might have to deal in a monday morning with a single GPU (!! for now !!).
-
-<img src="media/demo_token_heatmap.png" width="800">
 
 while watching [this](https://youtu.be/z2M8gKGYws4?si=0A6Pj4jjC-jhOjl0) video by PyTorch (Understanding the Inference Workload - Mark Moyou, NVIDIA), i got this idea.
 
@@ -60,3 +63,8 @@ uv run system-plot [run_dir] # png: KV cache, queue depth, prefix hit rate over 
 uv run workload-timeline [run_dir] # png: profile mix (siso/silo/liso/lilo) over run
 uv run token-counts [experiment] # terminal: prompt/budget token stats (pre-run)
 ```
+## acknowldegements
+
+> [!IMPORTANT] 
+> The entire harness was built using Claude Sonnet 4.6  
+> The code is not the MOAT, the experiments and inferences are.

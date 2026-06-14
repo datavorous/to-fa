@@ -2,6 +2,8 @@ import asyncio
 import sys
 import time
 
+import httpx
+
 from .config import load
 from .metrics import store, summarise
 from .runner import run
@@ -66,6 +68,31 @@ def print_summary(s):
         )
 
 
+def _drain(base_url, timeout_s=120):
+    metrics_url = base_url.replace("/v1", "") + "/metrics"
+    deadline = time.time() + timeout_s
+    print("draining server...", end="", flush=True)
+    while time.time() < deadline:
+        try:
+            r = httpx.get(metrics_url, timeout=5.0)
+            running = waiting = 0
+            for line in r.text.splitlines():
+                if line.startswith("#"):
+                    continue
+                if "vllm:num_requests_running{" in line:
+                    running = int(float(line.split()[-1]))
+                elif "vllm:num_requests_waiting{" in line:
+                    waiting = int(float(line.split()[-1]))
+            if running == 0 and waiting == 0:
+                print(" clear")
+                return
+        except Exception:
+            pass
+        print(".", end="", flush=True)
+        time.sleep(2)
+    print(" timeout, proceeding anyway")
+
+
 def _run_once(requests, CFG):
     t0 = time.perf_counter()
     results, snapshots = asyncio.run(run(requests, CFG, on_result=progress))
@@ -96,10 +123,12 @@ def main():
             f"sweep {CFG.sweep_param} over {CFG.sweep_values}  (base_mode={CFG.sweep_base_mode})"
         )
         CFG.load_mode = CFG.sweep_base_mode
-        for val in CFG.sweep_values:
+        for i, val in enumerate(CFG.sweep_values):
             setattr(CFG, CFG.sweep_param, val)
             print(f"\n=== {CFG.sweep_param}={val} ===")
             _run_once(requests, CFG)
+            if i < len(CFG.sweep_values) - 1:
+                _drain(CFG.base_url)
     else:
         _run_once(requests, CFG)
 

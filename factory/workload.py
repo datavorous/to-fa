@@ -6,7 +6,7 @@ _root = Path(__file__).parent.parent
 
 _SYSTEM_CHAT = (
     "You are a helpful assistant. Give short, direct answers. "
-    "No need to explain everything — just answer the question."
+    "No need to explain everything. Just answer the question."
 )
 _SYSTEM_CODE = (
     "You are an expert software engineer. Always write the COMPLETE implementation — "
@@ -17,12 +17,7 @@ _SYSTEM_CODE = (
     "and at least two concrete usage examples with expected output."
 )
 
-# ---------------------------------------------------------------------------
-# Synthetic prompt generation
-# Each template has {slots} filled with random picks from a vocabulary bank.
-# This guarantees every request is unique → no artificial prefix-cache hits.
-# ---------------------------------------------------------------------------
-
+# {slots} filled from _VOCAB — every request unique, no artificial cache hits
 _CHAT_TEMPLATES = [
     "What's the best way to {fix} my {thing} without spending a lot of money?",
     "How long does it take to {learn} {skill} if I practice {freq}?",
@@ -554,13 +549,6 @@ def _fill(template, vocab, rng):
     return result
 
 
-# ---------------------------------------------------------------------------
-# Long-prompt corpus: real source files embedded as context.
-# LISO = file + short-answer task (summarize, find bugs, explain)
-# LILO = file + long-answer task (rewrite, translate, refactor)
-# ---------------------------------------------------------------------------
-
-
 def _load_corpus():
     src = _root / "factory"
     files = {}
@@ -596,42 +584,45 @@ _LILO_TASKS = [
 ]
 
 
-_LISO_PREAMBLES = [
-    "Below is a Python module I'm reviewing. Please read it carefully before answering.",
-    "I need a code review of the following Python file. Read the full source first.",
-    "Here's a module from our codebase. I have a specific question after the code.",
-    "Take a look at this Python source file. My question follows the code block.",
-    "This is production Python code. Review it and answer the question at the end.",
-    "I'm auditing this module. Read the implementation before responding.",
-    "Attached is a Python file I'm analysing. Your task comes after the listing.",
-    "Study this Python module carefully. A review task follows.",
-]
+# Shared system prompt for prefix-caching experiments (~500 tokens).
+# Fixed across all LISO/LILO requests so the KV cache can reuse the prefix.
+_SHARED_PREFIX_SYSTEM = (
+    "You are an expert code reviewer with deep experience in systems programming, "
+    "distributed systems, and production Python. Your reviews are trusted by senior "
+    "engineers and are used to gate production deployments.\n\n"
+    "When reviewing code, follow this protocol:\n"
+    "1. CORRECTNESS first — identify any logic errors, off-by-one bugs, race conditions, "
+    "or incorrect assumptions about inputs. Cite exact line numbers.\n"
+    "2. SECURITY — flag injection vulnerabilities, insecure defaults, missing input "
+    "validation, credential exposure, or unsafe deserialization.\n"
+    "3. PERFORMANCE — identify O(n²) or worse algorithms where O(n log n) is achievable, "
+    "unnecessary allocations in hot paths, missing caching opportunities, and I/O patterns "
+    "that will not scale.\n"
+    "4. ANTI-PATTERNS — flag global mutable state, God objects, violation of single "
+    "responsibility, missing error propagation, swallowed exceptions, and magic numbers.\n"
+    "5. STYLE — only after the above. PEP8, naming, docstring coverage, type hint "
+    "completeness. Do not prioritise style over correctness.\n\n"
+    "Format: lead with a severity summary (CRITICAL / HIGH / MEDIUM / LOW item counts), "
+    "then enumerate findings in severity order. Each finding: severity tag, file and line "
+    "reference, one-sentence description, and a concrete fix (code snippet preferred). "
+    "End with a two-sentence overall assessment and a ship/hold recommendation.\n\n"
+    "Do not summarise what the code does unless it is directly relevant to a finding. "
+    "Do not praise the author. Do not use filler phrases like 'great job' or 'looks good'. "
+    "Be direct, be precise, be actionable. A review that misses a critical bug is worse "
+    "than one that is too harsh. When in doubt, flag it."
+)
 
-_LILO_PREAMBLES = [
-    "I need you to transform the following Python module. Read it fully first.",
-    "Here's a Python file I need converted. The full source is below.",
-    "Take this Python implementation and perform the rewrite described at the end.",
-    "Study the following Python code. A conversion task follows the listing.",
-    "Below is our Python module. I need a complete rewrite as described after the code.",
-    "Read this Python source in full. Then carry out the transformation task at the end.",
-    "This Python module needs to be ported. The target and requirements are at the end.",
-    "Full source of a Python file follows. Complete the rewrite task after it.",
-]
 
-
-def _make_liso_prompt(rng):
+def _make_liso_prompt(rng, shared_prefix=False):
     fname, src = rng.choice(list(_CORPUS.items()))
     task = rng.choice(_LISO_TASKS)
-    preamble = rng.choice(_LISO_PREAMBLES)
-    # randomised preamble breaks the shared prefix at token 1 — defeats prefix caching
-    return f"{preamble}\n\n### `{fname}`\n\n```python\n{src}\n```\n\n{task}"
+    return f"### `{fname}`\n\n```python\n{src}\n```\n\n{task}"
 
 
-def _make_lilo_prompt(rng):
+def _make_lilo_prompt(rng, shared_prefix=False):
     fname, src = rng.choice(list(_CORPUS.items()))
     task = rng.choice(_LILO_TASKS)
-    preamble = rng.choice(_LILO_PREAMBLES)
-    return f"{preamble}\n\n### `{fname}`\n\n```python\n{src}\n```\n\n{task}"
+    return f"### `{fname}`\n\n```python\n{src}\n```\n\n{task}"
 
 
 def _make_chat_prompt(rng):
@@ -646,9 +637,6 @@ def _make_code_prompt(rng, long=False):
         return _fill(rng.choice(_CODE_TEMPLATES_LONG), _CODE_VOCAB, rng)
     else:
         return _fill(rng.choice(_CODE_TEMPLATES_SHORT), _CODE_VOCAB, rng)
-
-
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -703,6 +691,14 @@ def generate(CFG):
             )
         )
 
+    shared_prefix = getattr(CFG, "shared_prefix", False)
+    liso_system = (
+        _SHARED_PREFIX_SYSTEM
+        if shared_prefix
+        else "You are a senior engineer doing a code review. Be precise and concise."
+    )
+    lilo_system = _SHARED_PREFIX_SYSTEM if shared_prefix else _SYSTEM_CODE
+
     # LISO: long prompt (real source file) + short output (code review / summarisation)
     for i in range(getattr(CFG, "liso_n", 0)):
         max_tokens = rng.randint(*getattr(CFG, "liso_max_tokens", [64, 256]))
@@ -710,7 +706,7 @@ def generate(CFG):
             Request(
                 id=f"liso-{i:04d}",
                 profile="liso",
-                system="You are a senior engineer doing a code review. Be precise and concise.",
+                system=liso_system,
                 user=_make_liso_prompt(rng),
                 max_tokens=max_tokens,
                 temperature=0.2,
@@ -725,7 +721,7 @@ def generate(CFG):
             Request(
                 id=f"lilo-{i:04d}",
                 profile="lilo",
-                system=_SYSTEM_CODE,
+                system=lilo_system,
                 user=_make_lilo_prompt(rng),
                 max_tokens=max_tokens,
                 temperature=0.2,

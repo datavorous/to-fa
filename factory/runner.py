@@ -22,15 +22,23 @@ class Result:
     tokens_per_sec: float = 0.0
     itl_ms: float = 0.0
     error: str = ""
+    intended_send_time: float = 0.0
+    actual_send_time: float = 0.0
+    first_token_time: float = 0.0
 
 
-async def fire(client, sem, req, CFG):
+async def fire(client, sem, req, CFG, intended_send_time: float = 0.0):
+    actual_send_time = time.time()
+    if intended_send_time == 0.0:
+        intended_send_time = actual_send_time
     result = Result(
         id=req.id,
         profile=req.profile,
         length=req.length,
         status="error",
         max_tokens=req.max_tokens,
+        intended_send_time=round(intended_send_time, 6),
+        actual_send_time=round(actual_send_time, 6),
     )
 
     body = {
@@ -72,6 +80,7 @@ async def fire(client, sem, req, CFG):
                         and choices[0].get("delta", {}).get("content")
                     ):
                         first_token_at = time.perf_counter()
+                        result.first_token_time = round(time.time(), 6)
 
                     if usage := chunk.get("usage"):
                         prompt_tokens = usage["prompt_tokens"]
@@ -93,6 +102,10 @@ async def fire(client, sem, req, CFG):
                 else 0.0
             )
 
+        except (httpx.RemoteProtocolError, httpx.ReadError, httpx.StreamError) as exc:
+            # connection dropped or stream cut by server under load
+            result.status = "aborted"
+            result.error = str(exc)
         except Exception as exc:
             result.error = str(exc)
 
@@ -101,7 +114,8 @@ async def fire(client, sem, req, CFG):
 
 async def _closed_loop(client, requests, concurrency, CFG, on_result):
     sem = asyncio.Semaphore(concurrency)
-    tasks = [asyncio.create_task(fire(client, sem, r, CFG)) for r in requests]
+    t_submit = time.time()
+    tasks = [asyncio.create_task(fire(client, sem, r, CFG, t_submit)) for r in requests]
     results = []
     for i, done in enumerate(asyncio.as_completed(tasks), 1):
         result = await done
@@ -115,12 +129,13 @@ async def _open_loop(client, requests, mode, rate_rps, CFG, on_result):
     total = len(requests)
     queue = asyncio.Queue()
 
-    async def _fire_and_enqueue(req):
-        result = await fire(client, None, req, CFG)
+    async def _fire_and_enqueue(req, intended_t):
+        result = await fire(client, None, req, CFG, intended_t)
         await queue.put(result)
 
     async def _dispatch():
         for i, req in enumerate(requests):
+            intended_t = time.time()
             if i > 0:
                 interval = (
                     (1.0 / rate_rps)
@@ -128,7 +143,8 @@ async def _open_loop(client, requests, mode, rate_rps, CFG, on_result):
                     else random.expovariate(rate_rps)
                 )
                 await asyncio.sleep(interval)
-            asyncio.create_task(_fire_and_enqueue(req))
+                intended_t = time.time()
+            asyncio.create_task(_fire_and_enqueue(req, intended_t))
 
     dispatch_task = asyncio.create_task(_dispatch())
 
